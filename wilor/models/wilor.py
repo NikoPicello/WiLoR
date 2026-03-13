@@ -121,7 +121,7 @@ class WiLoR(pl.LightningModule):
         temp_mano_params['global_orient'] = temp_mano_params['global_orient'].reshape(batch_size, -1, 3, 3)
         temp_mano_params['hand_pose'] = temp_mano_params['hand_pose'].reshape(batch_size, -1, 3, 3)
         temp_mano_params['betas'] = temp_mano_params['betas'].reshape(batch_size, -1)
-        temp_mano_output  = self.mano(**{k: v.float() for k,v in temp_mano_params.items()}, pose2rot=False)
+        temp_mano_output  = self.mano(**{k: v for k,v in temp_mano_params.items()}, pose2rot=False)
         #temp_keypoints_3d = temp_mano_output.joints
         temp_vertices     = temp_mano_output.vertices
 
@@ -143,7 +143,7 @@ class WiLoR(pl.LightningModule):
         pred_mano_params['global_orient'] = pred_mano_params['global_orient'].reshape(batch_size, -1, 3, 3)
         pred_mano_params['hand_pose'] = pred_mano_params['hand_pose'].reshape(batch_size, -1, 3, 3)
         pred_mano_params['betas'] = pred_mano_params['betas'].reshape(batch_size, -1)
-        mano_output = self.mano(**{k: v.float() for k,v in pred_mano_params.items()}, pose2rot=False)
+        mano_output = self.mano(**{k: v for k,v in pred_mano_params.items()}, pose2rot=False)
         pred_keypoints_3d = mano_output.joints
         pred_vertices = mano_output.vertices
   

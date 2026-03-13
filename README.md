@@ -26,16 +26,12 @@ This is the official implementation of **[WiLoR](https://rolpotamias.github.io/W
 
 ![teaser](assets/teaser.png)
 
+### 🚀 News: WiLoR can run even faster! 🚀
+✅ WiLoR demo now supports half precision inference and depth prunning, resulting in up to **1.6x** faster inferece with minimal performance degradation (~Δ-MPJPE 0.05mm). Simply run demo using `--fast` argument. 
+```bash
+python demo.py --img_folder demo_img --out_folder demo_out --save_mesh  --fast
+```
 ## Installation
-### [Update] Quick Installation
-Thanks to [@warmshao](https://github.com/warmshao) WiLoR can now be installed using a single pip command:  
-```
-pip install git+https://github.com/warmshao/WiLoR-mini
-```
-Please head to [WiLoR-mini](https://github.com/warmshao/WiLoR-mini) for additional details. 
-
-**Note:** the above code is a simplified version of WiLoR and can be used for demo only. 
-If you wish to use WiLoR for other tasks it is suggested to follow the original installation instructued bellow: 
 ### Original Installation
 ```
 git clone --recursive https://github.com/rolpotamias/WiLoR.git
@@ -59,10 +55,21 @@ wget https://huggingface.co/spaces/rolpotamias/WiLoR/resolve/main/pretrained_mod
 It is also required to download MANO model from [MANO website](https://mano.is.tue.mpg.de). 
 Create an account by clicking Sign Up and download the models (mano_v*_*.zip). Unzip and place the right hand model `MANO_RIGHT.pkl` under the `mano_data/` folder. 
 Note that MANO model falls under the [MANO license](https://mano.is.tue.mpg.de/license.html).
+
+### Quick Installation
+Thanks to [@warmshao](https://github.com/warmshao) WiLoR can now be installed using a single pip command:  
+```
+pip install git+https://github.com/warmshao/WiLoR-mini
+```
+Please head to [WiLoR-mini](https://github.com/warmshao/WiLoR-mini) for additional details. 
+
+**Note:** the above code is a simplified version of WiLoR and can be used for demo only. 
+
 ## Demo
 ```bash
-python demo.py --img_folder demo_img --out_folder demo_out --save_mesh 
+python demo.py --img_folder demo_img --out_folder demo_out --save_mesh --fast
 ```
+**[🚀 Update March 2026]**: Use argument `--fast` for up to **1.6** faster inference.  
 ## Start a local gradio demo
 You can start a local demo for inference by running:
 ```bash

@@ -21,11 +21,17 @@ def main():
     parser.add_argument('--save_mesh', dest='save_mesh', action='store_true', default=False, help='If set, save meshes to disk also')
     parser.add_argument('--rescale_factor', type=float, default=2.0, help='Factor for padding the bbox')
     parser.add_argument('--file_type', nargs='+', default=['*.jpg', '*.png', '*.jpeg'], help='List of file extensions to consider')
-
+    parser.add_argument('--fast',   dest='fast', action='store_true', default=False, help='Use FP16 and layer dropping to accelerate inference')
     args = parser.parse_args()
 
     # Download and load checkpoints
     model, model_cfg = load_wilor(checkpoint_path = './pretrained_models/wilor_final.ckpt' , cfg_path= './pretrained_models/model_config.yaml')
+    if args.fast:     
+        torch.set_float32_matmul_precision('high')
+        model = model.half()
+        model.backbone = torch.compile(model.backbone)
+        model.backbone.skip_blocks = True 
+        
     detector = YOLO('./pretrained_models/detector.pt')
     # Setup the renderer
     renderer = Renderer(model_cfg, faces=model.mano.faces)
@@ -56,7 +62,7 @@ def main():
             continue
         boxes = np.stack(bboxes)
         right = np.stack(is_right)
-        dataset = ViTDetDataset(model_cfg, img_cv2, boxes, right, rescale_factor=args.rescale_factor)
+        dataset = ViTDetDataset(model_cfg, img_cv2, boxes, right, rescale_factor=args.rescale_factor, fp16=args.fast)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=16, shuffle=False, num_workers=0)
 
         all_verts = []

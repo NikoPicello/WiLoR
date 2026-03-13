@@ -22,10 +22,12 @@ class ViTDetDataset(torch.utils.data.Dataset):
                  right: np.array,
                  rescale_factor=2.5,
                  train: bool = False,
+                 fp16: bool = False,  
                  **kwargs):
         super().__init__()
         self.cfg = cfg
         self.img_cv2 = img_cv2
+        self.fp16 = fp16
         # self.boxes = boxes
 
         assert train == False, "ViTDetDataset is only for inference"
@@ -83,7 +85,10 @@ class ViTDetDataset(torch.utils.data.Dataset):
         # apply normalization
         for n_c in range(min(self.img_cv2.shape[2], 3)):
             img_patch[n_c, :, :] = (img_patch[n_c, :, :] - self.mean[n_c]) / self.std[n_c]
-
+        
+        if self.fp16:
+            img_patch = torch.from_numpy(img_patch).half()
+            
         item = {
             'img': img_patch,
             'personid': int(self.personid[idx]),

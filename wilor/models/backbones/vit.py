@@ -90,7 +90,7 @@ class Mlp(nn.Module):
 class Attention(nn.Module):
     def __init__(
             self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.,
-            proj_drop=0., attn_head_dim=None,):
+            proj_drop=0., attn_head_dim=None, ):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -104,7 +104,7 @@ class Attention(nn.Module):
 
         self.qkv = nn.Linear(dim, all_head_dim * 3, bias=qkv_bias)
 
-        self.attn_drop = nn.Dropout(attn_drop)
+        self.attn_drop = attn_drop
         self.proj = nn.Linear(all_head_dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -112,20 +112,15 @@ class Attention(nn.Module):
         B, N, C = x.shape
         qkv = self.qkv(x)
         qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+        q, k, v = qkv[0], qkv[1], qkv[2]
 
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
+        attn = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.attn_drop)
 
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
+        x = attn.transpose(1, 2).reshape(B, N, -1)
         x = self.proj(x)
         x = self.proj_drop(x)
 
         return x
-
 class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, 
@@ -229,6 +224,8 @@ class ViT(nn.Module):
         self.freeze_attn = freeze_attn
         self.freeze_ffn = freeze_ffn
         self.depth = depth
+        self.blocks_to_skip = [25, 27, 26, 23, 24, 29, 22, 13, 14, 15, 20]
+        self.skip_blocks  = False 
 
         if hybrid_backbone is not None:
             self.patch_embed = HybridEmbed(
@@ -363,7 +360,9 @@ class ViT(nn.Module):
         cam_tokens   = self.cam_emb(self.init_cam).unsqueeze(1).repeat(B, 1, 1)
         
         x = torch.cat([pose_tokens, shape_tokens, cam_tokens, x], 1)
-        for blk in self.blocks:
+        for i, blk in enumerate(self.blocks):
+            if self.skip_blocks and i in self.blocks_to_skip[:5]:
+                continue 
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(blk, x)
             else:

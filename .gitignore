@@ -1,8 +1,8 @@
 pretrained_models/
 mano_data/
 assets/
-wilor/configs/__pycache__/
-wilor/datasets/__pycache__/
-wilor/models/__pycache__/
-wilor/utils/__pycache__/
+wilor/configs/__pycache__/*
+wilor/datasets/__pycache__/*
+wilor/models/__pycache__/*
+wilor/utils/__pycache__/*
 

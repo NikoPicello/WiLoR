@@ -34,10 +34,10 @@ class WiLoR(pl.LightningModule):
         if cfg.MODEL.BACKBONE.get('PRETRAINED_WEIGHTS', None):
             log.info(f'Loading backbone weights from {cfg.MODEL.BACKBONE.PRETRAINED_WEIGHTS}')
             self.backbone.load_state_dict(torch.load(cfg.MODEL.BACKBONE.PRETRAINED_WEIGHTS, map_location='cpu')['state_dict'], strict = False)
-            
+
         # Create RefineNet head
         self.refine_net = RefineNet(cfg, feat_dim=1280, upscale=3)
-        
+
         # Create discriminator
         if self.cfg.LOSS_WEIGHTS.ADVERSARIAL > 0:
             self.discriminator = Discriminator()
@@ -60,7 +60,7 @@ class WiLoR(pl.LightningModule):
         else:
             self.renderer = None
             self.mesh_renderer = None
-            
+
 
         # Disable automatic optimization since we use adversarial training
         self.automatic_optimization = False
@@ -108,16 +108,16 @@ class WiLoR(pl.LightningModule):
         batch_size = x.shape[0]
         # Compute conditioning features using the backbone
         # if using ViT backbone, we need to use a different aspect ratio
-        temp_mano_params, pred_cam, pred_mano_feats, vit_out = self.backbone(x[:,:,:,32:-32]) # B, 1280, 16, 12  
+        temp_mano_params, pred_cam, pred_mano_feats, vit_out = self.backbone(x[:,:,:,32:-32]) # B, 1280, 16, 12
 
-    
+
         # Compute camera translation
         device = temp_mano_params['hand_pose'].device
         dtype = temp_mano_params['hand_pose'].dtype
         focal_length = self.cfg.EXTRA.FOCAL_LENGTH * torch.ones(batch_size, 2, device=device, dtype=dtype)
-        
-        
-        ## Temp MANO 
+
+
+        ## Temp MANO
         temp_mano_params['global_orient'] = temp_mano_params['global_orient'].reshape(batch_size, -1, 3, 3)
         temp_mano_params['hand_pose'] = temp_mano_params['hand_pose'].reshape(batch_size, -1, 3, 3)
         temp_mano_params['betas'] = temp_mano_params['betas'].reshape(batch_size, -1)
@@ -125,10 +125,10 @@ class WiLoR(pl.LightningModule):
         #temp_keypoints_3d = temp_mano_output.joints
         temp_vertices     = temp_mano_output.vertices
 
-        pred_mano_params, pred_cam = self.refine_net(vit_out, temp_vertices, pred_cam, pred_mano_feats, focal_length) 
+        pred_mano_params, pred_cam = self.refine_net(vit_out, temp_vertices, pred_cam, pred_mano_feats, focal_length)
         # Store useful regression outputs to the output dict
-        
-       
+
+
         output = {}
         output['pred_cam'] = pred_cam
         output['pred_mano_params'] = {k: v.clone() for k,v in pred_mano_params.items()}
@@ -146,17 +146,17 @@ class WiLoR(pl.LightningModule):
         mano_output = self.mano(**{k: v for k,v in pred_mano_params.items()}, pose2rot=False)
         pred_keypoints_3d = mano_output.joints
         pred_vertices = mano_output.vertices
-  
+
         output['pred_keypoints_3d'] = pred_keypoints_3d.reshape(batch_size, -1, 3)
         output['pred_vertices'] = pred_vertices.reshape(batch_size, -1, 3)
         pred_cam_t = pred_cam_t.reshape(-1, 3)
         focal_length = focal_length.reshape(-1, 2)
-        
+
         pred_keypoints_2d = perspective_projection(pred_keypoints_3d,
                                                    translation=pred_cam_t,
                                                    focal_length=focal_length / self.cfg.MODEL.IMAGE_SIZE)
         output['pred_keypoints_2d'] = pred_keypoints_2d.reshape(batch_size, -1, 2)
-        
+
         return output
 
     def compute_loss(self, batch: Dict, output: Dict, train: bool = True) -> torch.Tensor:
@@ -239,7 +239,7 @@ class WiLoR(pl.LightningModule):
         focal_length = output['focal_length'].detach().reshape(batch_size, 2)
         gt_keypoints_3d = batch['keypoints_3d']
         gt_keypoints_2d = batch['keypoints_2d']
-        
+
         losses = output['losses']
         pred_cam_t = output['pred_cam_t'].detach().reshape(batch_size, 3)
         pred_keypoints_2d = output['pred_keypoints_2d'].detach().reshape(batch_size, -1, 2)

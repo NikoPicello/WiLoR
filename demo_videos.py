@@ -176,7 +176,8 @@ def main():
             input_img = frame.astype(np.float32)[:,:,::-1]/255.0
             input_img = np.concatenate([input_img, np.ones_like(input_img[:,:,:1])], axis=2) # Add alpha channel
             input_img_overlay = input_img[:,:,:3] * (1-cam_view[:,:,3:]) + cam_view[:,:,:3] * cam_view[:,:,3:]
-            writer.append_data(255*input_img_overlay.astype(np.uint8)[:, :, ::-1])
+            writer.append_data((255*input_img_overlay).astype(np.uint8)[:, :, ::-1])
+
 
         cap.release()
         writer.close()

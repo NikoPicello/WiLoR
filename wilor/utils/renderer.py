@@ -100,7 +100,7 @@ def rotz(theta):
         ],
         dtype=torch.float32,
     )
-    
+
 
 def create_raymond_lights() -> List[pyrender.Node]:
     """
@@ -162,7 +162,7 @@ class Renderer:
                               [120, 108, 78],
                               [78, 108, 79]])
         faces = np.concatenate([faces, faces_new], axis=0)
-        
+
         self.camera_center = [self.img_res // 2, self.img_res // 2]
         self.faces = faces
         self.faces_left = self.faces[:,[0,2,1]]
@@ -187,7 +187,7 @@ class Renderer:
             full_frame (bool): If True, then render on the full image.
             imgname (Optional[str]): Contains the original image filenamee. Used only if full_frame == True.
         """
-        
+
         if full_frame:
             image = cv2.imread(imgname).astype(np.float32)[:, :, ::-1] / 255.
         else:
@@ -247,7 +247,7 @@ class Renderer:
         output_img = output_img.astype(np.float32)
         return output_img
 
-    def vertices_to_trimesh(self, vertices, camera_translation, mesh_base_color=(1.0, 1.0, 0.9), 
+    def vertices_to_trimesh(self, vertices, camera_translation, mesh_base_color=(1.0, 1.0, 0.9),
                             rot_axis=[1,0,0], rot_angle=0, is_right=1):
         # material = pyrender.MetallicRoughnessMaterial(
         #     metallicFactor=0.0,
@@ -259,7 +259,7 @@ class Renderer:
         else:
             mesh = trimesh.Trimesh(vertices.copy() + camera_translation, self.faces_left.copy(), vertex_colors=vertex_colors)
         # mesh = trimesh.Trimesh(vertices.copy(), self.faces.copy())
-        
+
         rot = trimesh.transformations.rotation_matrix(
                 np.radians(rot_angle), rot_axis)
         mesh.apply_transform(rot)
@@ -384,6 +384,91 @@ class Renderer:
         renderer.delete()
 
         return color
+
+    def render_rgba_multiple_osmesa(
+        self,
+        vertices: List[np.array],
+        cam_t: List[np.array],
+        rot_axis=[1,0,0],
+        rot_angle=0,
+        mesh_base_color=(1.0, 1.0, 0.9),
+        scene_bg_color=(0,0,0),
+        render_res=[256, 256],
+        focal_length=None,
+        is_right=None,
+        ):
+        """
+        Render RGBA using OSMesa backend.
+
+        Since OSMesa doesn't properly return alpha through pyrender's RGBA flag,
+        we extract alpha from the depth buffer: 1 where geometry was rendered,
+        0 for background pixels.
+
+        Args:
+            vertices: List of vertex arrays
+            cam_t: List of camera transformation matrices
+            rot_axis: Rotation axis
+            rot_angle: Rotation angle
+            mesh_base_color: RGB color tuple (0-1 range)
+            scene_bg_color: Background color RGB tuple (0-1 range)
+            render_res: [width, height] of render
+            focal_length: Camera focal length (uses self.focal_length if None)
+            is_right: List of boolean flags for right/left
+
+        Returns:
+            color_rgba: (H, W, 4) float32 array in range [0, 1] with proper alpha
+        """
+        renderer = pyrender.OffscreenRenderer(viewport_width=render_res[0],
+                                              viewport_height=render_res[1],
+                                              point_size=1.0)
+
+        if is_right is None:
+            is_right = [1 for _ in range(len(vertices))]
+
+        # Create meshes
+        mesh_list = [
+            pyrender.Mesh.from_trimesh(
+                self.vertices_to_trimesh(vvv, ttt.copy(), mesh_base_color, rot_axis, rot_angle, is_right=sss)
+            )
+            for vvv, ttt, sss in zip(vertices, cam_t, is_right)
+        ]
+
+        # Create scene with transparent background
+        scene = pyrender.Scene(bg_color=[*scene_bg_color, 0.0],
+                               ambient_light=(0.3, 0.3, 0.3))
+
+        for i, mesh in enumerate(mesh_list):
+            scene.add(mesh, f'mesh_{i}')
+
+        # Set up camera
+        camera_pose = np.eye(4)
+        camera_center = [render_res[0] / 2., render_res[1] / 2.]
+        focal_length = focal_length if focal_length is not None else self.focal_length
+        camera = pyrender.IntrinsicsCamera(fx=focal_length, fy=focal_length,
+                                           cx=camera_center[0], cy=camera_center[1], zfar=1e12)
+        camera_node = pyrender.Node(camera=camera, matrix=camera_pose)
+        scene.add_node(camera_node)
+
+        # Add lighting
+        self.add_point_lighting(scene, camera_node)
+        self.add_lighting(scene, camera_node)
+        light_nodes = create_raymond_lights()
+        for node in light_nodes:
+            scene.add_node(node)
+
+        # Render with RGBA flag
+        color, rend_depth = renderer.render(scene, flags=pyrender.RenderFlags.RGBA)
+        color = color.astype(np.float32) / 255.0
+
+        # Extract alpha from depth buffer
+        # 1.0 where geometry was rendered (depth > 0), 0.0 where background
+        alpha = (rend_depth > 0).astype(np.float32)[:, :, None]
+
+        # Concatenate RGB + alpha to get RGBA
+        color_rgba = np.concatenate([color[:, :, :3], alpha], axis=2)
+
+        renderer.delete()
+        return color_rgba
 
     def add_lighting(self, scene, cam_node, color=np.ones(3), intensity=1.0):
         # from phalp.visualize.py_renderer import get_light_poses

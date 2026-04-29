@@ -1,8 +1,12 @@
+import os, sys
+# Exclude ~/.local site-packages to avoid numpy binary incompatibility
+# (packages there may be compiled against a different numpy version)
+sys.path = [p for p in sys.path if '.local' not in p]
+
 from pathlib import Path
+import pickle
 import torch
 import argparse
-import os
-import sys
 import cv2 as cv
 import numpy as np
 import json
@@ -10,6 +14,7 @@ import glob
 import imageio
 from typing import Dict, Optional
 from tqdm import tqdm, trange
+from scipy.spatial.transform import Rotation as SciR
 
 from wilor.models import WiLoR, load_wilor
 from wilor.utils import recursive_to
@@ -28,6 +33,7 @@ cam_map = {
 }
 
 activities = ['animals', 'gaze', 'ghost', 'lego', 'talk']
+vis = False
 def main():
   device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -52,8 +58,11 @@ def main():
 
   # Make output directory if it does not exist
   os.makedirs(out_path, exist_ok=True)
+  # Save MANO face topology once so downstream scripts can use it without the model loaded
+  np.save(os.path.join(out_path, 'mano_faces.npy'), np.array(model.mano.faces))
 
   for sid_path in sid_paths:
+    session_id = Path(sid_path).stem
     with open(os.path.join(sid_path, 'session_data.txt')) as f:
       lines = f.readlines()
       calib_date = lines[1][11:].strip()
@@ -81,18 +90,29 @@ def main():
         fps = int(cap.get(cv.CAP_PROP_FPS))
         total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
 
-        out_vid_path = os.path.join(out_path, f"{video_name}_render.mp4")
-        out_npy_path = os.path.join(out_path, f"{video_name}_res.npy")
-        writer = imageio.get_writer(
-            out_vid_path,
-            fps=fps, mode='I', format='FFMPEG', macro_block_size=1
-        )
+        curr_out_path = os.path.join(out_path, f"{session_id}/{activity}")
+        out_mano_path = os.path.join(curr_out_path, f"{video_name}_mano")
+        out_vid_path = os.path.join(curr_out_path, f"{video_name}_render.mp4")
+        out_pkl_path = os.path.join(curr_out_path, f"{video_name}_wilor.pkl")
+        os.makedirs(curr_out_path, exist_ok=True)
+        os.makedirs(out_mano_path, exist_ok=True)
+        if vis:
+          writer = imageio.get_writer(
+              out_vid_path,
+              fps=fps, mode='I', format='FFMPEG', macro_block_size=1
+          )
 
-        out_npy_result = {}
+        # List of per-hand detection dicts saved at the end of each video
+        all_detections = []
         print(f"total frames = {total_frames}")
-        for fidx in trange(total_frames):
+        # for fidx in trange(total_frames):
+        for fidx in trange(5):
           ret, frame = cap.read()
           if not ret: break
+          frame = cv.resize(frame, (1280, 720))
+
+
+
 
           out_frame_dict = {
             "fidx": fidx,
@@ -124,6 +144,14 @@ def main():
 
             with torch.no_grad():
               out = model(batch)
+            # for k, v in out.items():
+            #   if isinstance(v, dict):
+            #     print(f"{k}")
+            #     for k1, v1 in v.items():
+            #       print(f" -{k1} : {v1.shape}")
+            #   else:
+            #     print(f"{k} : {v.shape}")
+            # return
 
             multiplier    = (2*batch['right']-1)
             pred_cam      = out['pred_cam']
@@ -150,21 +178,50 @@ def main():
               cam_t = pred_cam_t_full[n]
               kpts_2d = project_full_img(verts, cam_t, scaled_focal_length, img_size[n])
 
+              h_idx = len(all_verts)  # unique per-hand index within this frame
               all_verts.append(verts)
               all_cam_t.append(cam_t)
               all_right.append(is_right)
               all_joints.append(joints)
               all_kpts.append(kpts_2d)
 
+              # ── extract MANO params; convert rotation matrices → axis-angle ──
+              sf = float(scaled_focal_length)
+              go_rotmat = out['pred_mano_params']['global_orient'][n].detach().cpu().numpy().reshape(-1, 3, 3)  # (1, 3, 3)
+              hp_rotmat = out['pred_mano_params']['hand_pose'][n].detach().cpu().numpy().reshape(-1, 3, 3)       # (15, 3, 3)
+              go_aa = SciR.from_matrix(go_rotmat).as_rotvec()   # (1, 3)
+              hp_aa = SciR.from_matrix(hp_rotmat).as_rotvec()   # (15, 3)
+              betas_n = out['pred_mano_params']['betas'][n].detach().cpu().numpy()  # (10,)
 
-              # Save all meshes to disk
+              # ── project hand keypoints to full-image pixel space (numpy) ──
+              cx = float(img_size[n][0]) / 2.0
+              cy = float(img_size[n][1]) / 2.0
+              pts_cam = joints + cam_t
+              pts_cam = pts_cam / pts_cam[:, 2:3]
+              kpts_2d_joints = np.stack([pts_cam[:, 0] * sf + cx,
+                                         pts_cam[:, 1] * sf + cy], axis=1)  # (21, 2)
+
+              hand_side = 'right' if bool(is_right) else 'left'
+              all_detections.append({
+                  'frame_index':      fidx,
+                  'hand_side':        hand_side,
+                  'kpt2d':            kpts_2d_joints,   # (21, 2) pixel coords
+                  'kpt3d':            joints,           # (21, 3) camera space
+                  'vertices':         verts,            # (778, 3) camera space
+                  'cam_t':            cam_t,            # (3,)
+                  'focal':            sf,               # float
+                  'hand_pose_aa':     hp_aa,            # (15, 3)
+                  'global_orient_aa': go_aa,            # (1, 3)
+                  'betas':            betas_n,          # (10,)
+              })
+
+              # Keep the trimesh for optional .obj export
               camera_translation = cam_t.copy()
               tmesh = renderer.vertices_to_trimesh(verts, camera_translation, LIGHT_PURPLE, is_right=is_right)
-              out_npy_result[n] = tmesh
-              # tmesh.export(os.path.join(out_path, f'{video_name}_{n}.obj'))
+              tmesh.export(os.path.join(out_mano_path, f'f{fidx}_h{h_idx}.obj'))
 
           # Render front view
-          if len(all_verts) > 0:
+          if vis and len(all_verts) > 0:
             misc_args = dict(
                 mesh_base_color=LIGHT_PURPLE,
                 scene_bg_color=(1, 1, 1),
@@ -180,21 +237,27 @@ def main():
 
 
         cap.release()
-        writer.close()
-        np.save(out_npy_path, out_npy_result)
+        if vis: writer.close()
+        with open(out_pkl_path, 'wb') as f:
+          pickle.dump(all_detections, f)
+        print(f"  Saved {len(all_detections)} hand detections → {out_pkl_path}")
 
 def project_full_img(points, cam_trans, focal_length, img_res):
-  camera_center = [img_res[0] / 2., img_res[1] / 2.]
-  K = torch.eye(3)
-  K[0,0] = focal_length
-  K[1,1] = focal_length
-  K[0,2] = camera_center[0]
-  K[1,2] = camera_center[1]
-  points = points + cam_trans
-  points = points / points[..., -1:]
+  """Project 3D points (N,3) to full-image 2D pixel coords (N,2).
 
-  V_2d = (K @ points.T).T
-  return V_2d[..., :-1]
+  points:       numpy (N, 3) in camera space
+  cam_trans:    numpy (3,) full-image camera translation
+  focal_length: scalar – scaled focal length in pixels
+  img_res:      (width, height) or tensor with same layout
+  """
+  cx = float(img_res[0]) / 2.0
+  cy = float(img_res[1]) / 2.0
+  sf = float(focal_length)
+  pts = np.asarray(points, dtype=np.float32) + np.asarray(cam_trans, dtype=np.float32)
+  pts = pts / pts[:, 2:3]
+  x = pts[:, 0] * sf + cx
+  y = pts[:, 1] * sf + cy
+  return np.stack([x, y], axis=1)
 
 if __name__ == '__main__':
   main()

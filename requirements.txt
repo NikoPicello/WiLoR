@@ -5,7 +5,6 @@ pytorch-lightning
 scikit-image
 smplx==0.1.28
 yacs
-chumpy @ git+https://github.com/mattloper/chumpy
 timm
 einops
 xtcocotools

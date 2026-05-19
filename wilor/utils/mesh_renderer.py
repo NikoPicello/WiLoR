@@ -1,6 +1,6 @@
 import os
 if 'PYOPENGL_PLATFORM' not in os.environ:
-    os.environ['PYOPENGL_PLATFORM'] = 'egl'
+    os.environ['PYOPENGL_PLATFORM'] = 'osmesa'
 import torch
 from torchvision.utils import make_grid
 import numpy as np
@@ -49,7 +49,7 @@ class MeshRenderer:
         self.renderer = pyrender.OffscreenRenderer(viewport_width=self.img_res,
                                        viewport_height=self.img_res,
                                        point_size=1.0)
-        
+
         self.camera_center = [self.img_res // 2, self.img_res // 2]
         self.faces = faces
 

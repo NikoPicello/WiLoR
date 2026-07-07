@@ -27,7 +27,7 @@ Note that MANO model falls under the [MANO license](https://mano.is.tue.mpg.de/l
 
 ## How to use [standalone]. 
 Given the pipeline, we defined the following structure for the project:
-'''bash 
+```bash 
 ├── resources
 |   ├── sessions
 |   │   ├── 000000 
@@ -70,10 +70,12 @@ Given the pipeline, we defined the following structure for the project:
     ├── 3DDFA-V3
     |   └── ...
     └── ...
-'''
+```
 
 In order to run the pipeline on the sessions saved with the same format shown above just run the script:
-"python3 wilor_pipeline.py"
+```bash
+python3 wilor_pipeline.py -b 8 --max_frames 50 --sid 000000 --aid talk --vis
+```
 
 There are some flags that can be used to specifiy:
 - batch size,

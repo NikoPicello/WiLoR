@@ -27,36 +27,50 @@ Note that MANO model falls under the [MANO license](https://mano.is.tue.mpg.de/l
 
 ## How to use [standalone]. 
 Given the pipeline, we defined the following structure for the project:
-_ scripts
-  |__ wilor
-   __ 3ddfa
-   __ ...
-
-_ reources
-  |_ sessions
-     |_ 000000
-        |_ lego
-         _ talk
-         _ ghost
-         _ ...
-      _ 000010
-        |_ lego
-         _ talk
-         _ ghost
-         _ ...
-  |_ wilor_results
-     |_ 000000
-        |_ lego
-           |_ cam1_wilor.pkl
-            _ cam2_wilor.pkl
-            _ cam3_wilor.pkl
-            _ ...
-         _ talk
-           |_ cam1_wilor.pkl
-            _ cam2_wilor.pkl
-            _ cam3_wilor.pklhost
-         _ ...
-
+'''bash 
+├── resources
+|   ├── sessions
+|   │   ├── 000000 
+|   │   │   ├── talk
+|   │   │   ├── lego
+|   │   │   ├── ghost
+|   │   │   └── ...
+|   │   ├── 000010 
+|   │   |   ├── talk
+|   │   |   ├── lego
+|   │   |   ├── ghost
+|   │   |   └── ...
+|   |   └── ... 
+|   ├── wilor_results
+|   │   ├── 000000 
+|   │   │   ├── talk
+|   |   |   |   ├── cam1_wilor.pkl
+|   |   |   |   ├── cam2_wilor.pkl
+|   |   |   |   └── ...
+|   │   │   ├── lego
+|   |   |   |   ├── cam1_wilor.pkl
+|   |   |   |   ├── cam2_wilor.pkl
+|   |   |   |   └── ...
+|   │   │   └── ...
+|   │   ├── 000010 
+|   │   |   ├── talk
+|   |   |   |   ├── cam1_wilor.pkl
+|   |   |   |   ├── cam2_wilor.pkl
+|   |   |   |   └── ...
+|   │   │   ├── lego
+|   |   |   |   ├── cam1_wilor.pkl
+|   |   |   |   ├── cam2_wilor.pkl
+|   |   |   |   └── ...
+|   │   |   └── ...
+|   |   └── ... 
+└── scripts
+    ├── WiLoR
+    │   ├── wilor_pipeline.py 
+    |   └── ...
+    ├── 3DDFA-V3
+    |   └── ...
+    └── ...
+'''
 
 In order to run the pipeline on the sessions saved with the same format shown above just run the script:
 "python3 wilor_pipeline.py"

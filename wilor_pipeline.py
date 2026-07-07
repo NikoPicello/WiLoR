@@ -11,13 +11,14 @@ import cv2 as cv
 import numpy as np
 import glob
 import imageio
+import argparse
 from tqdm import trange
 from scipy.spatial.transform import Rotation as SciR
 from torch.utils.data import default_collate
 
 from wilor.models import WiLoR, load_wilor
 from wilor.utils import recursive_to
-from wilor.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
+from wilor.datasets.vitdet_dataset import ViTDetDataset
 from wilor.utils.renderer import Renderer, cam_crop_to_full
 from ultralytics import YOLO
 LIGHT_PURPLE = (0.25098039, 0.274117647, 0.65882353)
@@ -32,11 +33,20 @@ cam_map = {
 }
 
 activities = ['animals', 'gaze', 'ghost', 'lego', 'talk']
-activities = ['lego']
-vis = True
-FRAME_BATCH = 4  # frames accumulated per WiLoR forward pass; tune to GPU memory
-
 def main():
+  parser = argparse.ArgumentParser()
+  parser.add_argument('-b', '--batch_size', type=int, default=8,
+                      help="Spcecify the batch size [defualt=8]")
+  parser.add_argument('--vis', action='store_true',
+                      help="If set, the function enerates the video of the detected hands")
+  parser.add_argument('--sid', type=str, default=None,
+                      help="Specify a session to process")
+  parser.add_argument('--aid', default='all', choices=['animals', 'gaze', 'ghost', 'lego', 'talk'],
+                      help="Specify an activity to process among [animals|gaze|ghost|lego|talk]")
+  parser.add_argument('--max_frames', type=int, default=-1,
+                      help="Max number of frames being processed")
+  args = parser.parse_args()
+  activities = activities if args.aid is None else [args.aid]
   device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
   main_path = '/'.join(sys.path[0].split('/')[:-2]) + '/'
@@ -48,7 +58,7 @@ def main():
 
   model, model_cfg = load_wilor(checkpoint_path='./pretrained_models/wilor_final.ckpt', cfg_path='./pretrained_models/model_config.yaml')
   detector = YOLO('./pretrained_models/detector.pt')
-  if vis:
+  if args.vis:
     renderer = Renderer(model_cfg, faces=model.mano.faces)
 
   model    = model.to(device)
@@ -60,7 +70,7 @@ def main():
 
   for sid_path in sid_paths:
     session_id = Path(sid_path).stem
-    if '005013' not in session_id: continue
+    if args.sid is not None and args.sid not in session_id: continue
 
     with open(os.path.join(sid_path, 'session_data.txt')) as f:
       lines = f.readlines()
@@ -86,12 +96,15 @@ def main():
 
         cap = cv.VideoCapture(vid_path)
         fps          = int(cap.get(cv.CAP_PROP_FPS))
-        total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
+        if args.max_frames == -1:
+          total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
+        else:
+          total_frames = args.max_frames
 
         curr_out_path = os.path.join(out_path, f"{session_id}/{activity}")
         out_pkl_path  = os.path.join(curr_out_path, f"{video_name}_wilor.pkl")
         os.makedirs(curr_out_path, exist_ok=True)
-        if vis:
+        if args.vis:
           out_mano_path = os.path.join(curr_out_path, f"{video_name}_mano")
           out_vid_path  = os.path.join(curr_out_path, f"{video_name}_render.mp4")
           os.makedirs(out_mano_path, exist_ok=True)
@@ -144,7 +157,7 @@ def main():
             pred_cam_t_full = cam_crop_to_full(pred_cam, box_center, box_size, img_size, scaled_focal_length).detach().cpu().numpy()
             sf = float(scaled_focal_length)
 
-            if vis:
+            if args.vis:
               vis_per_frame = {}  # fi -> {verts, cam_t, right, img_size}
 
             for n in range(len(samples)):
@@ -183,7 +196,7 @@ def main():
                   'betas':            betas_n,
               })
 
-              if vis:
+              if args.vis:
                 if fi not in vis_per_frame:
                   vis_per_frame[fi] = {'verts': [], 'cam_t': [], 'right': [], 'img_size': img_size[n]}
                 h_idx = len(vis_per_frame[fi]['verts'])
@@ -193,7 +206,7 @@ def main():
                 tmesh = renderer.vertices_to_trimesh(verts, cam_t.copy(), LIGHT_PURPLE, is_right=is_right_n)
                 tmesh.export(os.path.join(out_mano_path, f'f{fidx}_h{h_idx}.obj'))
 
-            if vis:
+            if args.vis:
               for fi, frame in enumerate(frames_buf):
                 input_img = frame.astype(np.float32)[:,:,::-1] / 255.0
                 if fi in vis_per_frame:
@@ -208,7 +221,7 @@ def main():
                 else:
                   writer.append_data((255*input_img).astype(np.uint8)[:, :, ::-1])
 
-          elif vis:
+          elif args.vis:
             for frame in frames_buf:
               writer.append_data(frame[:,:,::-1])
 
@@ -220,15 +233,16 @@ def main():
           ret, frame = cap.read()
           if not ret:
             break
-          frames_buf.append(cv.resize(frame, (1280, 720)))
+          # frames_buf.append(cv.resize(frame, (1280, 720)))
+          frames_buf.append(frame)
           fidxs_buf.append(fidx)
-          if len(frames_buf) == FRAME_BATCH:
+          if len(frames_buf) == args.batch_size:
             flush()
 
         flush()  # process any remaining frames
 
         cap.release()
-        if vis: writer.close()
+        if args.vis: writer.close()
         with open(out_pkl_path, 'wb') as f:
           pickle.dump(all_detections, f)
         print(f"  Saved {len(all_detections)} hand detections → {out_pkl_path}")

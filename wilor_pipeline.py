@@ -46,7 +46,7 @@ def main():
   parser.add_argument('--max_frames', type=int, default=-1,
                       help="Max number of frames being processed")
   args = parser.parse_args()
-  activities = activities if args.aid is None else [args.aid]
+  activities = activities if args.aid in (None, 'all') else [args.aid]
   device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
   main_path = '/'.join(sys.path[0].split('/')[:-2]) + '/'

@@ -1,7 +1,6 @@
 This implementation is based on **[WiLoR](https://rolpotamias.github.io/WiLoR/)**, a state-of-the-art hand localization and reconstruction model;
 
 ## Installation
-### Original Installation
 ```
 git clone --recursive https://github.com/rolpotamias/WiLoR.git
 cd WiLoR

@@ -1,0 +1,6 @@
+[009106] already staged at /home/hupba_ws/resources/sessions/009106
+[009106] running: /opt/conda/envs/wilor/bin/python wilor_pipeline.py --sid 009106 --activities lego_task (CUDA_VISIBLE_DEVICES=5)
+usage: wilor_pipeline.py [-h] [-b BATCH_SIZE] [--vis] [--sid SID]
+                         [--aid {animals_task,gaze_task,ghost_task,lego_task,talk_task}]
+                         [--max_frames MAX_FRAMES]
+wilor_pipeline.py: error: unrecognized arguments: --activities lego_task

@@ -1,0 +1,35 @@
+[076143] already staged at /home/hupba_ws/resources/sessions/076143
+[076143] running: /opt/conda/envs/wilor/bin/python wilor_pipeline.py --sid 076143 --aid lego_task (CUDA_VISIBLE_DEVICES=6)
+Traceback (most recent call last):
+  File "/home/hupba_ws/scripts/WiLoR/wilor_pipeline.py", line 29, in <module>
+    from wilor.datasets.vitdet_dataset import ViTDetDataset
+  File "/home/hupba_ws/scripts/WiLoR/wilor/datasets/vitdet_dataset.py", line 5, in <module>
+    from skimage.filters import gaussian
+  File "<frozen importlib._bootstrap>", line 1075, in _handle_fromlist
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/lazy_loader/__init__.py", line 78, in __getattr__
+    submod = importlib.import_module(submod_path)
+  File "/opt/conda/envs/wilor/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/skimage/filters/_gaussian.py", line 4, in <module>
+    from ..util import img_as_float
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/skimage/util/__init__.py", line 34, in <module>
+    from .lookfor import lookfor
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/skimage/util/lookfor.py", line 3, in <module>
+    from .._vendored.numpy_lookfor import lookfor as _lookfor
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/skimage/_vendored/numpy_lookfor.py", line 21, in <module>
+    _function_signature_re = re.compile(r"[a-z0-9_]+\(.*[,=].*\)", re.I)
+  File "/opt/conda/envs/wilor/lib/python3.10/re.py", line 251, in compile
+    return _compile(pattern, flags)
+  File "/opt/conda/envs/wilor/lib/python3.10/re.py", line 303, in _compile
+    p = sre_compile.compile(pattern, flags)
+  File "/opt/conda/envs/wilor/lib/python3.10/sre_compile.py", line 792, in compile
+    code = _code(p, flags)
+  File "/opt/conda/envs/wilor/lib/python3.10/sre_compile.py", line 631, in _code
+    _compile(code, p.data, flags)
+  File "/opt/conda/envs/wilor/lib/python3.10/sre_compile.py", line 164, in _compile
+    _compile(code, av[2], flags)
+  File "/opt/conda/envs/wilor/lib/python3.10/sre_compile.py", line 136, in _compile
+    charset, hascased = _optimize_charset(av, iscased, tolower, fixes)
+  File "/opt/conda/envs/wilor/lib/python3.10/sre_compile.py", line 292, in _optimize_charset
+    def _optimize_charset(charset, iscased=None, fixup=None, fixes=None):
+KeyboardInterrupt

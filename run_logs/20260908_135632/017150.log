@@ -1,0 +1,26 @@
+[017150] already staged at /home/hupba_ws/resources/sessions/017150
+[017150] running: /opt/conda/envs/wilor/bin/python wilor_pipeline.py --sid 017150 --activities lego_task (CUDA_VISIBLE_DEVICES=5)
+Traceback (most recent call last):
+  File "/home/hupba_ws/scripts/WiLoR/wilor_pipeline.py", line 27, in <module>
+    from wilor.models import WiLoR, load_wilor
+  File "/home/hupba_ws/scripts/WiLoR/wilor/models/__init__.py", line 2, in <module>
+    from .wilor import WiLoR
+  File "/home/hupba_ws/scripts/WiLoR/wilor/models/wilor.py", line 7, in <module>
+    from ..utils import SkeletonRenderer, MeshRenderer
+  File "/home/hupba_ws/scripts/WiLoR/wilor/utils/__init__.py", line 4, in <module>
+    from .renderer import Renderer
+  File "/home/hupba_ws/scripts/WiLoR/wilor/utils/renderer.py", line 6, in <module>
+    import pyrender
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/pyrender/__init__.py", line 3, in <module>
+    from .light import Light, PointLight, DirectionalLight, SpotLight
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/pyrender/light.py", line 10, in <module>
+    from OpenGL.GL import *
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/OpenGL/GL/__init__.py", line 4, in <module>
+    from OpenGL.GL.VERSION.GL_1_1 import *
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/OpenGL/GL/VERSION/GL_1_1.py", line 14, in <module>
+    from OpenGL.raw.GL.VERSION.GL_1_1 import *
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/OpenGL/raw/GL/VERSION/GL_1_1.py", line 7, in <module>
+    from OpenGL.raw.GL import _errors
+  File "/opt/conda/envs/wilor/lib/python3.10/site-packages/OpenGL/raw/GL/_errors.py", line 4, in <module>
+    _error_checker = _ErrorChecker( _p, _p.GL.glGetError )
+AttributeError: 'NoneType' object has no attribute 'glGetError'

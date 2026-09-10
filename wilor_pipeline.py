@@ -2,7 +2,15 @@ import os, sys
 # Exclude ~/.local site-packages to avoid numpy binary incompatibility
 # (packages there may be compiled against a different numpy version)
 sys.path = [p for p in sys.path if '.local' not in p]
-os.environ['PYOPENGL_PLATFORM'] = 'osmesa'
+if 'PYOPENGL_PLATFORM' not in os.environ:
+    os.environ['PYOPENGL_PLATFORM'] = 'osmesa'
+# EGL (unlike osmesa) opens a real GPU context, and pyrender picks its device
+# via EGL_DEVICE_ID -- a separate selection mechanism from CUDA_VISIBLE_DEVICES
+# that defaults to physical device 0 if unset. Keep it pinned to whatever GPU
+# CUDA_VISIBLE_DEVICES already points to, so PYOPENGL_PLATFORM=egl (set outside
+# this script, e.g. in the container's shell) can't land a stray context on
+# GPU 0 regardless of which GPU was actually requested.
+os.environ.setdefault('EGL_DEVICE_ID', os.environ.get('CUDA_VISIBLE_DEVICES', '0').split(',')[0])
 
 from pathlib import Path
 import pickle
@@ -32,21 +40,21 @@ cam_map = {
   'N2' : 'HA2'
 }
 
-activities = ['animals', 'gaze', 'ghost', 'lego', 'talk']
+activities = ['animals_task', 'gaze_task', 'ghost_task', 'lego_task', 'talk_task']
 def main():
   parser = argparse.ArgumentParser()
-  parser.add_argument('-b', '--batch_size', type=int, default=8,
+  parser.add_argument('-b', '--batch_size', type=int, default=128,
                       help="Spcecify the batch size [defualt=8]")
   parser.add_argument('--vis', action='store_true',
                       help="If set, the function enerates the video of the detected hands")
   parser.add_argument('--sid', type=str, default=None,
                       help="Specify a session to process")
-  parser.add_argument('--aid', default='all', choices=['animals', 'gaze', 'ghost', 'lego', 'talk'],
+  parser.add_argument('--aid', default='all', choices=['animals_task', 'gaze_task', 'ghost_task', 'lego_task', 'talk_task'],
                       help="Specify an activity to process among [animals|gaze|ghost|lego|talk]")
   parser.add_argument('--max_frames', type=int, default=-1,
                       help="Max number of frames being processed")
   args = parser.parse_args()
-  activities = activities if args.aid in (None, 'all') else [args.aid]
+  run_activities = activities if args.aid in (None, 'all') else [args.aid]
   device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
   main_path = '/'.join(sys.path[0].split('/')[:-2]) + '/'
@@ -87,7 +95,7 @@ def main():
       fs.release()
       cam_dict[cam_map[cam_name]] = {'K': K, 'D': D, 'R': R, 'T': T}
 
-    for activity in activities:
+    for activity in run_activities:
       vid_paths = glob.glob(os.path.join(sid_path, activity) + '/*')
       vid_paths = [v for v in vid_paths if not ('E1.mp4' in v or 'E2.mp4' in v)]
       for vid_path in vid_paths:

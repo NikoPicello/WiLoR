@@ -40,7 +40,11 @@ cam_map = {
   'N2' : 'HA2'
 }
 
-activities = ['animals_task', 'gaze_task', 'ghost_task', 'lego_task', 'talk_task']
+# image mode (--use_video unset) reads frames extracted by ../../scripts/extract_frames.py,
+# which doesn't persist fps; this is the dataset's fixed capture rate, only used for --vis's
+# preview video playback speed (not for anything numerical).
+DEFAULT_FPS = 25
+
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('-b', '--batch_size', type=int, default=128,
@@ -49,12 +53,15 @@ def main():
                       help="If set, the function enerates the video of the detected hands")
   parser.add_argument('--sid', type=str, default=None,
                       help="Specify a session to process")
-  parser.add_argument('--aid', default='all', choices=['animals_task', 'gaze_task', 'ghost_task', 'lego_task', 'talk_task'],
-                      help="Specify an activity to process among [animals|gaze|ghost|lego|talk]")
-  parser.add_argument('--max_frames', type=int, default=-1,
+  parser.add_argument('--activities', nargs='+',
+                      default=['animals_task', 'gaze_task', 'ghost_task', 'lego_task', 'talk_task'],
+                      help="Specify one or more activities to process (default: all)")
+  parser.add_argument('--max-frames', type=int, default=-1,
                       help="Max number of frames being processed")
+  parser.add_argument('--use_video', action='store_true',
+                      help="If set, read *.mp4 directly; default reads pre-extracted "
+                           "frame folders from ../../scripts/extract_frames.py")
   args = parser.parse_args()
-  run_activities = activities if args.aid in (None, 'all') else [args.aid]
   device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
   main_path = '/'.join(sys.path[0].split('/')[:-2]) + '/'
@@ -95,19 +102,26 @@ def main():
       fs.release()
       cam_dict[cam_map[cam_name]] = {'K': K, 'D': D, 'R': R, 'T': T}
 
-    for activity in run_activities:
-      vid_paths = glob.glob(os.path.join(sid_path, activity) + '/*')
-      vid_paths = [v for v in vid_paths if not ('E1.mp4' in v or 'E2.mp4' in v)]
-      for vid_path in vid_paths:
-        video_name = Path(vid_path).stem
+    for activity in args.activities:
+      if args.use_video:
+        data_paths = glob.glob(os.path.join(sid_path, activity, '*.mp4'))
+        data_paths = [v for v in data_paths if not ('E1.mp4' in v or 'E2.mp4' in v)]
+      else:
+        data_paths = [p for p in glob.glob(os.path.join(sid_path, activity) + '/*') if os.path.isdir(p)]
+      for data_path in data_paths:
+        video_name = Path(data_path).stem
         K = cam_dict[video_name]['K']
 
-        cap = cv.VideoCapture(vid_path)
-        fps          = int(cap.get(cv.CAP_PROP_FPS))
-        if args.max_frames == -1:
+        if args.use_video:
+          cap = cv.VideoCapture(data_path)
+          fps          = int(cap.get(cv.CAP_PROP_FPS))
           total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
         else:
-          total_frames = args.max_frames
+          image_paths  = sorted(glob.glob(os.path.join(data_path, '*.jpeg')))
+          fps          = DEFAULT_FPS
+          total_frames = len(image_paths)
+        if args.max_frames != -1:
+          total_frames = min(total_frames, args.max_frames)
 
         curr_out_path = os.path.join(out_path, f"{session_id}/{activity}")
         out_pkl_path  = os.path.join(curr_out_path, f"{video_name}_wilor.pkl")
@@ -238,10 +252,16 @@ def main():
 
         print(f"total frames = {total_frames}")
         for fidx in trange(total_frames):
-          ret, frame = cap.read()
-          if not ret:
-            break
-          # frames_buf.append(cv.resize(frame, (1280, 720)))
+          if args.use_video:
+            ret, frame = cap.read()
+            if not ret:
+              break
+            # frame = cv.resize(frame, (1280, 720))
+          else:
+            frame = cv.imread(image_paths[fidx])
+            if frame is None:
+              print(f'  [warn] unreadable frame, skipping: {image_paths[fidx]}')
+              continue
           frames_buf.append(frame)
           fidxs_buf.append(fidx)
           if len(frames_buf) == args.batch_size:
@@ -249,7 +269,8 @@ def main():
 
         flush()  # process any remaining frames
 
-        cap.release()
+        if args.use_video:
+          cap.release()
         if args.vis: writer.close()
         with open(out_pkl_path, 'wb') as f:
           pickle.dump(all_detections, f)

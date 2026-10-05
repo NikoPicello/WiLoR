@@ -81,7 +81,6 @@ def main():
   model.eval()
 
   os.makedirs(out_path, exist_ok=True)
-  np.save(os.path.join(out_path, 'mano_faces.npy'), np.array(model.mano.faces))
 
   for sid_path in sid_paths:
     session_id = Path(sid_path).stem
@@ -147,12 +146,14 @@ def main():
           samples     = []
           sample_fidx = []  # original frame index per sample
           sample_fi   = []  # position in frames_buf per sample
+          sample_conf = []  # YOLO box confidence per sample
 
           for fi, (frame, dets) in enumerate(zip(frames_buf, yolo_out)):
-            bboxes, rights = [], []
+            bboxes, rights, confs = [], [], []
             for det in dets:
               Bbox = det.boxes.data.cpu().detach().squeeze().numpy()
               rights.append(det.boxes.cls.cpu().detach().squeeze().item())
+              confs.append(det.boxes.conf.cpu().detach().squeeze().item())
               bboxes.append(Bbox[:4].tolist())
             if not bboxes:
               continue
@@ -161,6 +162,7 @@ def main():
               samples.append(dataset[i])
               sample_fidx.append(fidxs_buf[fi])
               sample_fi.append(fi)
+              sample_conf.append(confs[i])
 
           # ── single WiLoR forward pass for all hands ───────────────────────
           if samples:
@@ -185,18 +187,15 @@ def main():
             for n in range(len(samples)):
               fidx       = sample_fidx[n]
               fi         = sample_fi[n]
-              verts      = out['pred_vertices'][n].detach().cpu().numpy()
               joints     = out['pred_keypoints_3d'][n].detach().cpu().numpy()
               is_right_n = batch['right'][n].cpu().numpy()
-              verts[:,0]  = (2*is_right_n-1)*verts[:,0]
               joints[:,0] = (2*is_right_n-1)*joints[:,0]
               cam_t = pred_cam_t_full[n]
 
-              go_rotmat = out['pred_mano_params']['global_orient'][n].detach().cpu().numpy().reshape(-1, 3, 3)
+              # raw prediction for the (flipped, if left) crop, i.e. right-hand MANO
+              # convention; mano_triangulation.py mirrors it for left hands
               hp_rotmat = out['pred_mano_params']['hand_pose'][n].detach().cpu().numpy().reshape(-1, 3, 3)
-              go_aa     = SciR.from_matrix(go_rotmat).as_rotvec()
               hp_aa     = SciR.from_matrix(hp_rotmat).as_rotvec()
-              betas_n   = out['pred_mano_params']['betas'][n].detach().cpu().numpy()
 
               cx = float(img_size[n][0]) / 2.0
               cy = float(img_size[n][1]) / 2.0
@@ -205,20 +204,18 @@ def main():
               kpts_2d_joints = np.stack([pts_cam[:, 0] * sf + cx,
                                          pts_cam[:, 1] * sf + cy], axis=1)
 
+              # only the fields mano_triangulation.py reads, plus the detector score
               all_detections.append({
-                  'frame_index':      fidx,
-                  'hand_side':        'right' if bool(is_right_n) else 'left',
-                  'kpt2d':            kpts_2d_joints,
-                  'kpt3d':            joints,
-                  'vertices':         verts,
-                  'cam_t':            cam_t,
-                  'focal':            sf,
-                  'hand_pose_aa':     hp_aa,
-                  'global_orient_aa': go_aa,
-                  'betas':            betas_n,
+                  'frame_index':  fidx,
+                  'hand_side':    'right' if bool(is_right_n) else 'left',
+                  'det_conf':     sample_conf[n],
+                  'kpt2d':        kpts_2d_joints,
+                  'hand_pose_aa': hp_aa,
               })
 
               if args.vis:
+                verts       = out['pred_vertices'][n].detach().cpu().numpy()
+                verts[:,0]  = (2*is_right_n-1)*verts[:,0]
                 if fi not in vis_per_frame:
                   vis_per_frame[fi] = {'verts': [], 'cam_t': [], 'right': [], 'img_size': img_size[n]}
                 h_idx = len(vis_per_frame[fi]['verts'])
